@@ -54,3 +54,10 @@ audio_example/drums.wav
 audio_example/other.wav
 audio_example/piano.wav
 audio_example/vocals.wav
+breakgen.py
+pretrained_models/5stems/._checkpoint
+pretrained_models/5stems/.probe
+pretrained_models/5stems/checkpoint
+pretrained_models/5stems/model.data-00000-of-00001
+pretrained_models/5stems/model.index
+pretrained_models/5stems/model.meta

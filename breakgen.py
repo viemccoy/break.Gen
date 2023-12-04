@@ -120,10 +120,14 @@ def replace_drums_with_breakbeats(bars, breakbeats, sample_rate, energy_scores, 
 
         intensity = 'max' if int(intensity) > 8 else intensity
         if random.random() < .3:
-            if random.random() < chop_chance[intensity]:  
-                new_bars.extend(effect(chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy)))
+            if random.random() < chop_chance[intensity]:
+                new_extend = chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy)
+                effected = effect(new_extend)
+                new_bars.extend(effected)
             else:
-                new_bars.extend(effect(chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy)))
+                new_extend = chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy)
+                effected = effect(new_extend)
+                new_bars.extend(effected)
         else:
             if random.random() < chop_chance[intensity]:  
                 new_bars.extend(chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy))
@@ -138,16 +142,22 @@ def normalize_audio(audio):
     return audio / np.max(np.abs(audio))
 
 def Distort_fx(audio):
+    audio = np.array(audio)
+    audio = np.mean(audio, axis=1)
     board = Pedalboard([Distortion()])
-    audio = board(audio)
+    audio = board.process(audio, sr)
     return audio
 
 def Reverb_fx(audio):
+    audio = np.array(audio)
+    audio = np.mean(audio, axis=1)
     board = Pedalboard([Reverb()])
-    audio = board(audio)
+    audio = board.process(audio, sr)
     return audio
 
 def effect(audio):
+    audio = np.array(audio)
+    audio = np.mean(audio, axis=1)
     # List of effects
 
     effects = ['phaser', 'reverb', 'delay', 'chorus', 'distortion', 'high_pass', 'low_pass', 'bitcrush']
@@ -158,32 +168,32 @@ def effect(audio):
         # Apply the chosen effect
         if effect == 'phaser':
             board = Pedalboard([Phaser()])
-            audio = board(audio)
+            audio = board.process(audio, sr)
         elif effect == 'reverb':
             board = Pedalboard([Reverb()])
-            audio = board(audio)
+            audio = board.process(audio, sr)
             pass
         elif effect == 'delay':
             board = Pedalboard([Delay()])
-            audio = board(audio)
+            audio = board.process(audio, sr)
             pass
         elif effect == 'chorus':
             board = Pedalboard([Chorus()])
-            audio = board(audio)
+            audio = board.process(audio, sr)
             pass
         elif effect == 'distortion':
             board = Pedalboard([Distortion()])
-            audio = board(audio)
+            audio = board.process(audio, sr)
             pass
         elif effect == 'high_pass':
             board = Pedalboard([HighpassFilter()])
-            audio = board(audio)  # 2000 Hz
+            audio = board.process(audio, sr)  # 2000 Hz
         elif effect == 'low_pass':
             board = Pedalboard([LowpassFilter()])
-            audio = board(audio)  # 2000 Hz
+            audio = board.process(audio, sr)  # 2000 Hz
         elif effect == 'bitcrush':
             board = Pedalboard([Bitcrush()])
-            audio = board(audio)
+            audio = board.process(audio, sr)
         return audio
     
     else:
@@ -225,6 +235,8 @@ if __name__ == '__main__':
     # Using custom configuration file.
     audio_loader = AudioAdapter.default()
     sample_rate = 44100
+    global sr
+    sr = sample_rate
     waveform, _ = audio_loader.load(song_path, sample_rate=sample_rate)
     prediction = separator.separate(waveform)
 
