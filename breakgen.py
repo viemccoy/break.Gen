@@ -1,4 +1,4 @@
-## beat.Gen by v @ violet castles . com
+## beat.Gen by v @ violet castles . com <3
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -33,7 +33,8 @@ def create_ui():
     hyperpop_var = tk.StringVar(value="n")
     hyperpop_entry = tk.Checkbutton(window, variable=hyperpop_var, onvalue="y", offvalue="n")
     hyperpop_entry.grid(row=3, column=1)
-
+    
+    """
     tk.Label(window, text="Reverb vocals:").grid(row=4)
     reverb_vox_var = tk.StringVar(value="n")
     reverb_vox_entry = tk.Checkbutton(window, variable=reverb_vox_var, onvalue="y", offvalue="n")
@@ -54,13 +55,15 @@ def create_ui():
     break_fx_entry = tk.Checkbutton(window, variable=break_fx_var, onvalue="y", offvalue="n")
     break_fx_entry.grid(row=7, column=1)
 
+    """
+
     def start_process():
         global hyperpop, reverb_vox, intensity, song_path, bpm, distort_backing, reverb_backing, break_fx
         hyperpop = hyperpop_var.get()
-        reverb_vox = reverb_vox_var.get()
-        distort_backing = distort_backing_var.get()
-        reverb_backing = reverb_backing_var.get()
-        break_fx = break_fx_var.get()
+        ##reverb_vox = reverb_vox_var.get()
+        ##distort_backing = distort_backing_var.get()
+        ##reverb_backing = reverb_backing_var.get()
+        ##break_fx = break_fx_var.get()
         intensity = intensity_entry.get()
         song_path = song_path_entry.get()
         bpm = bpm_entry.get()
@@ -114,26 +117,25 @@ def replace_drums_with_breakbeats(bars, breakbeats, sample_rate, energy_scores, 
 
 
         # Sample chopping based on intensity
-        chop_chance = {1: 0.5, 2: 0.5, 3: 0.8, 4: 0.6, 5: 0.6, 6: 0.9, 7: 0.6, 8: 0.9, 'max': 0.5}
-        chop_amount = {1: 2, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 8, 8: 8, 'max': 16}
-        else_amount = {1: 4, 2: 4, 3: 4, 4: 2, 5: 2, 6: 2, 7: 4, 8: 4, 'max': 8}
+        chop_chance = {1: 0.5, 2: 0.5, 3: 0.8, 4: 0.6, 5: 0.6, 6: 0.9, 7: 0.6, 8: 0.9, 9: 0.5}
+        chop_amount = {1: 2, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 8, 8: 8, 9: 16}
+        else_amount = {1: 4, 2: 4, 3: 4, 4: 2, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8}
 
-        intensity = 'max' if int(intensity) > 8 else intensity
-        if random.random() < .3:
+        """if random.random() < .3:
             if random.random() < chop_chance[intensity]:
                 new_extend = chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy)
-                effected = effect(new_extend)
+                effected = np.array([effect(new_extend)])
                 new_bars.extend(effected)
             else:
                 new_extend = chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy)
-                effected = effect(new_extend)
+                effected = np.array([effect(new_extend)])
                 new_bars.extend(effected)
+        else: """
+        if random.random() < chop_chance[intensity]:  
+            new_bars.extend(chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy))
         else:
-            if random.random() < chop_chance[intensity]:  
-                new_bars.extend(chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy))
-            else:
-                new_bars.extend(chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy))
-            
+            new_bars.extend(chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy))
+        
 
     new_bars = np.concatenate(new_bars)[:len(drums)]
     return new_bars
@@ -142,29 +144,28 @@ def normalize_audio(audio):
     return audio / np.max(np.abs(audio))
 
 def Distort_fx(audio):
-    audio = np.array(audio)
-    audio = np.mean(audio, axis=1)
+    audio = audio.astype(np.float32)
+    audio = np.array(audio).flatten()
     board = Pedalboard([Distortion()])
     audio = board.process(audio, sr)
     return audio
 
 def Reverb_fx(audio):
-    audio = np.array(audio)
-    audio = np.mean(audio, axis=1)
+    audio = audio.astype(np.float32)
+    audio = np.array(audio).flatten()
     board = Pedalboard([Reverb()])
     audio = board.process(audio, sr)
     return audio
 
 def effect(audio):
-    audio = np.array(audio)
-    audio = np.mean(audio, axis=1)
-    # List of effects
 
-    effects = ['phaser', 'reverb', 'delay', 'chorus', 'distortion', 'high_pass', 'low_pass', 'bitcrush']
+    """ effects = ['phaser', 'reverb', 'delay', 'chorus', 'distortion', 'high_pass', 'low_pass', 'bitcrush']
 
     # Choose a random effect
     effect = random.choice(effects)
     if break_fx.lower() == "y":
+        audio = audio.astype(np.float32)
+        audio = np.array(audio).flatten()
         # Apply the chosen effect
         if effect == 'phaser':
             board = Pedalboard([Phaser()])
@@ -187,17 +188,17 @@ def effect(audio):
             pass
         elif effect == 'high_pass':
             board = Pedalboard([HighpassFilter()])
-            audio = board.process(audio, sr)  # 2000 Hz
+            audio = board.process(audio, sr)
         elif effect == 'low_pass':
             board = Pedalboard([LowpassFilter()])
-            audio = board.process(audio, sr)  # 2000 Hz
+            audio = board.process(audio, sr)
         elif effect == 'bitcrush':
             board = Pedalboard([Bitcrush()])
             audio = board.process(audio, sr)
         return audio
     
-    else:
-        return audio
+    else: """
+    return audio
 
 def chop_and_replace(breakbeat, n, breakbeats, energy_level):
     to_chop = np.array_split(breakbeat, n)
@@ -216,15 +217,10 @@ def chop_and_replace(breakbeat, n, breakbeats, energy_level):
         start = int((i / n) * segment_length)
         end = start + segment_length
         to_chop[i] = replacement[start:end]
-
         # Update the last two replacements
         last_two_replacements[0] = last_two_replacements[1]
         last_two_replacements[1] = replacement.tolist()
-        if random.random() < .2:
-            chopped.append(effect(to_chop[i]))
-        else:
-            chopped.append(to_chop[i])
-
+        chopped.append(to_chop[i])
     return chopped
 
 if __name__ == '__main__': 
@@ -254,6 +250,10 @@ if __name__ == '__main__':
     for energy in sample_energy:
         breakbeats[energy] = [librosa.load(os.path.join("breaks", energy, f), sr=sample_rate)[0] for f in os.listdir(os.path.join("breaks", energy)) if f.endswith('.wav')]
         print(f"{energy}: {len(breakbeats[energy])} breakbeats")
+    
+    vocals = np.array(vocals, dtype=np.float32)
+    backing = np.array(backing, dtype=np.float32)
+    drums = np.array(drums, dtype=np.float32)
 
     drums = np.mean(drums, axis=1) # convert to mono
 
@@ -320,6 +320,7 @@ if __name__ == '__main__':
     backing = normalize_audio(backing)
     bars = normalize_audio(bars)
 
+    """
     if distort_backing.lower() == "y":
         backing = Distort_fx(backing)
 
@@ -328,9 +329,10 @@ if __name__ == '__main__':
 
     if reverb_vox.lower() == "y":
         vocals = Reverb_fx(vocals)
-    
+    """
     #re-implement RMS
     #percentage based mix based on RMS
+    #make it so silent breaks don't make it into the mix
 
 
     vocals = vocals.reshape(-1, 1)
