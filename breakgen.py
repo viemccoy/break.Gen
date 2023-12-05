@@ -306,24 +306,14 @@ def main():
 
     bars = len(beat_frames) // 4
     bars = np.array_split(drums, bars)
-    bgd_vocals = np.mean(vocals, axis=1)
-    bgd_backing = np.mean(backing, axis=1)
-    bgd = bgd_vocals + bgd_backing
-    bgd_bars = np.array_split(bgd, len(bars))
 
-    # Calculate energy_scores and amplitude_scores simultaneously
-    energy_scores = []
-    amplitude_scores = []
-    for bar, bgd_bar in zip(bars, bgd_bars):
-        energy_scores.append(np.sum(np.abs(bar)))
-        amplitude_scores.append(np.max(np.abs(bgd_bar)))
+    energy_scores = [np.sum(np.abs(bar)) for bar in bars]
 
     print(energy_scores);
     avg_energy = np.average(energy_scores)
 
     print (f"Average energy: {avg_energy}");
-    print(len(energy_scores))
-    print(len(amplitude_scores))
+
     tempo, beat_frames = librosa.beat.beat_track(drums, sr=sample_rate)
     
     if tempo < 80: #this allows us to make sure the song is properly sped up
