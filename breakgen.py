@@ -2,6 +2,7 @@
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 from spleeter.separator import Separator
 from spleeter.audio.adapter import AudioAdapter
 import librosa
@@ -12,8 +13,18 @@ import os
 import tkinter as tk
 from tkinter import filedialog
 from pedalboard import *
+import pygame.mixer
+import time
+
+song_exported = False
 
 def create_ui():
+       # Add player controls
+    def play_song():
+        pygame.mixer.music.play()  # Play the song
+
+    def stop_song():
+        pygame.mixer.music.stop()  # Stop the song
     window = tk.Tk()
     window.title("break.Gen")
 
@@ -58,6 +69,9 @@ def create_ui():
     """
 
     def start_process():
+        separator = Separator('spleeter:5stems')
+        audio_loader = AudioAdapter.default()
+        pygame.mixer.init()
         global hyperpop, reverb_vox, intensity, song_path, bpm, distort_backing, reverb_backing, break_fx
         hyperpop = hyperpop_var.get()
         ##reverb_vox = reverb_vox_var.get()
@@ -67,33 +81,61 @@ def create_ui():
         intensity = intensity_entry.get()
         song_path = song_path_entry.get()
         bpm = bpm_entry.get()
-        window.quit()
 
-    tk.Button(window, text="Start", command=start_process).grid(row=8, column=1)
+        main()
+
+        while not song_exported:
+            time.sleep(1)  # Wait for 1 second
+
+        start_button.grid_remove()
+
+        new_export = filedialog.asksaveasfilename(defaultextension=".mp3", filetypes=[("MP3 files", "*.mp3")])
+        audio_loader.save(new_export, final, separator._sample_rate, "mp3", "128k")
+        pygame.mixer.music.load(export_path) #load the export
+
+        play_button = tk.Button(window, text='Play', command=play_song)
+        stop_button = tk.Button(window, text='Stop', command=stop_song)
+
+        def exit():
+            pygame.mixer.music.stop()
+            window.quit()
+        
+        def restart_process():
+            global song_exported
+            song_exported = False
+            start_process()
+        
+        play_button.grid(row=9, column=1)
+        stop_button.grid(row=10, column=1)
+        exit_button = tk.Button(window, text='Exit', command=exit)
+        exit_button.grid(row=11, column=1)
+        restart_button = tk.Button(window, text="Restart", command=restart_process)
+        restart_button.grid(row=12, column=1)
+    
+    start_button = tk.Button(window, text="Start", command=start_process)
+    start_button.grid(row=8, column=1)
 
     window.mainloop()
-
 
 def timefix(breakbeat):
     # Normalize the breakbeat
     breakbeat = normalize_audio(breakbeat)
     # Track the beats in the breakbeat
-    _, beat_frames = librosa.beat.beat_track(breakbeat, sr=sample_rate)
+    _, beat_frames = librosa.beat.beat_track(breakbeat, sr=sr)
 
     # If the breakbeat is longer than 4 bars, keep only the first 4 bars
     if len(beat_frames) > 16:
         beat_frames = beat_frames[:16]
         breakbeat = breakbeat[:beat_frames[-1]]
-    # If the breakbeat is shorter than 4 bars, pad with silence
+    # If the breakbeat is shorter than 4 bars, repeat sections until it's 16 beats long
     elif len(beat_frames) < 16:
-        padding = np.zeros((16 - len(beat_frames)) * sample_rate)
-        breakbeat = np.concatenate([breakbeat, padding])
+        repeats = (16 // len(beat_frames)) + 1  # Calculate the number of repeats needed
+        breakbeat = np.tile(breakbeat, repeats)  # Repeat the breakbeat
+        breakbeat = breakbeat[:(16 * sr)]  # Trim the repeated breakbeat to 16 beats
 
-    # No need to calculate the stretch factor or stretch the breakbeat
-    # Just return the first four bars of the breakbeat
     return breakbeat
 
-def replace_drums_with_breakbeats(bars, breakbeats, sample_rate, energy_scores, intensity, drums):
+def replace_drums_with_breakbeats(bars, breakbeats, sr, energy_scores, intensity, drums):
     new_bars = []
     
     # Calculate energy thresholds based on percentiles
@@ -141,7 +183,7 @@ def replace_drums_with_breakbeats(bars, breakbeats, sample_rate, energy_scores, 
     return new_bars
 
 def normalize_audio(audio):
-    return audio / np.max(np.abs(audio))
+    return librosa.util.normalize(audio)
 
 def Distort_fx(audio):
     audio = audio.astype(np.float32)
@@ -223,9 +265,8 @@ def chop_and_replace(breakbeat, n, breakbeats, energy_level):
         chopped.append(to_chop[i])
     return chopped
 
-if __name__ == '__main__': 
-    create_ui()
-
+def main():
+    global hyperpop, intensity, song_path, bpm
     separator = Separator('spleeter:5stems')
 
     # Using custom configuration file.
@@ -265,15 +306,24 @@ if __name__ == '__main__':
 
     bars = len(beat_frames) // 4
     bars = np.array_split(drums, bars)
+    bgd_vocals = np.mean(vocals, axis=1)
+    bgd_backing = np.mean(backing, axis=1)
+    bgd = bgd_vocals + bgd_backing
+    bgd_bars = np.array_split(bgd, len(bars))
 
-    energy_scores = [np.sum(np.abs(bar)) for bar in bars]
+    # Calculate energy_scores and amplitude_scores simultaneously
+    energy_scores = []
+    amplitude_scores = []
+    for bar, bgd_bar in zip(bars, bgd_bars):
+        energy_scores.append(np.sum(np.abs(bar)))
+        amplitude_scores.append(np.max(np.abs(bgd_bar)))
 
     print(energy_scores);
-    
     avg_energy = np.average(energy_scores)
 
     print (f"Average energy: {avg_energy}");
-
+    print(len(energy_scores))
+    print(len(amplitude_scores))
     tempo, beat_frames = librosa.beat.beat_track(drums, sr=sample_rate)
     
     if tempo < 80: #this allows us to make sure the song is properly sped up
@@ -311,14 +361,19 @@ if __name__ == '__main__':
     bars = replace_drums_with_breakbeats(bars, breakbeats, sample_rate, energy_scores, intensity, drums)
     
     print(bars)
+    print(len(amplitude_scores))
     print(len(bars))
     print(len(vocals))
     print(len(backing))
 
-    # Normalize the audio tracks
-    vocals = normalize_audio(vocals)
-    backing = normalize_audio(backing)
-    bars = normalize_audio(bars)
+    def rms(audio):
+        rms_value = np.sqrt(np.mean(audio**2))
+        return audio / rms_value
+
+    vocals = normalize_audio(rms(vocals))
+    backing = normalize_audio(rms(backing))
+    bars = normalize_audio(rms(bars))
+
 
     """
     if distort_backing.lower() == "y":
@@ -330,18 +385,24 @@ if __name__ == '__main__':
     if reverb_vox.lower() == "y":
         vocals = Reverb_fx(vocals)
     """
-    #re-implement RMS
-    #percentage based mix based on RMS
-    #make it so silent breaks don't make it into the mix
-
 
     vocals = vocals.reshape(-1, 1)
     backing = backing.reshape(-1, 1)
     bars = bars.reshape(-1, 1)
     mix = vocals + backing
     mix *= np.max(np.abs(bars))
-    mix *= 2.55
+    mix *=2
+    global final
+    bars *= 0.65
     final = mix + bars
     final = normalize_audio(mix + bars)
     final = final.reshape(-1,1)
-    audio_loader.save("/Users/v/Documents/break.Gen/output/export_file.mp3", final, separator._sample_rate, "mp3", "128k")
+    def export():
+        global export_path
+        export_path = "output/export_file.mp3"   
+        audio_loader.save("output/export_file.mp3", final, separator._sample_rate, "mp3", "128k")
+        global song_exported
+        song_exported = True
+    export()
+if __name__ == '__main__': 
+    create_ui()
