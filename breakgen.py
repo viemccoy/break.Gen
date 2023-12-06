@@ -133,6 +133,12 @@ def timefix(breakbeat):
         breakbeat = np.tile(breakbeat, repeats)  # Repeat the breakbeat
         breakbeat = breakbeat[:(16 * sr)]  # Trim the repeated breakbeat to 16 beats
 
+    rms = np.sqrt(np.mean(breakbeat**2))
+    desired_rms = 10**(-3/20)  # Convert -3dB to linear scale
+    gain = desired_rms / rms
+    breakbeat = breakbeat * gain
+
+
     return breakbeat
 
 def replace_drums_with_breakbeats(bars, breakbeats, sr, energy_scores, intensity, drums):
@@ -290,7 +296,6 @@ def main():
 
     for energy in sample_energy:
         breakbeats[energy] = [librosa.load(os.path.join("breaks", energy, f), sr=sample_rate)[0] for f in os.listdir(os.path.join("breaks", energy)) if f.endswith('.wav')]
-        print(f"{energy}: {len(breakbeats[energy])} breakbeats")
     
     vocals = np.array(vocals, dtype=np.float32)
     backing = np.array(backing, dtype=np.float32)
@@ -309,7 +314,6 @@ def main():
 
     energy_scores = [np.sum(np.abs(bar)) for bar in bars]
 
-    print(energy_scores);
     avg_energy = np.average(energy_scores)
 
     print (f"Average energy: {avg_energy}");
@@ -350,19 +354,83 @@ def main():
 
     bars = replace_drums_with_breakbeats(bars, breakbeats, sample_rate, energy_scores, intensity, drums)
     
-    print(bars)
-    print(len(amplitude_scores))
     print(len(bars))
     print(len(vocals))
     print(len(backing))
 
-    def rms(audio):
-        rms_value = np.sqrt(np.mean(audio**2))
-        return audio / rms_value
+    def compress(audio, threshold=-3, ratio=3): #basic compressor implementation
+        # Convert threshold from dB to linear
+        threshold_linear = 10.0**(threshold / 20)
 
-    vocals = normalize_audio(rms(vocals))
-    backing = normalize_audio(rms(backing))
-    bars = normalize_audio(rms(bars))
+        # Calculate gain
+        gain = np.where(audio > threshold_linear, ratio * (audio - threshold_linear), 0)
+
+        # Apply gain to audio
+        compressed_audio = audio - gain
+
+        return compressed_audio
+
+    def apply_gain(audio, target_db=-3):
+        # Convert target dB to linear
+        target_linear = 10.0**(target_db / 20)
+
+        # Calculate current level
+        current_level = np.sqrt(np.mean(audio**2))
+
+        # Calculate required gain
+        gain = target_linear / current_level
+
+        # Apply gain to audio
+        audio = audio * gain
+
+        return audio
+
+    def agc(audio, target_rms=None): #automated gain control
+        # Calculate current RMS
+        current_rms = np.sqrt(np.mean(audio**2))
+
+        # If no target RMS is provided, set it to the current RMS
+        if target_rms is None:
+            target_rms = current_rms
+
+        # Calculate required gain
+        gain = target_rms / current_rms
+
+        # Apply gain to audio
+        agc_audio = audio * gain
+
+        return agc_audio
+    
+
+
+    # Normalize each track
+    #vocals = normalize_audio(vocals)
+    #backing = normalize_audio(backing)
+    #bars = normalize_audio(bars)
+
+    # Calculate the RMS of each track
+    vocals_rms = np.sqrt(np.mean(vocals**2))
+    backing_rms = np.sqrt(np.mean(backing**2))
+    drums_rms = np.sqrt(np.mean(drums**2))
+
+    # Find the minimum RMS
+    min_rms = min(vocals_rms, backing_rms, drums_rms)
+
+    # Use the minimum RMS as the target for the AGC
+    vocals = agc(vocals, min_rms)
+    backing = agc(backing, min_rms)
+    drums = agc(drums, min_rms)
+
+    # Compress each track - maybe remove this one
+    vocals = compress(vocals)
+    backing = compress(backing)
+    drums = compress(drums)
+
+    # Apply gain to bring each track up to -3 dB
+    vocals = apply_gain(vocals)
+    backing = apply_gain(backing)
+    drums = apply_gain(drums)
+
 
 
     """
@@ -379,14 +447,11 @@ def main():
     vocals = vocals.reshape(-1, 1)
     backing = backing.reshape(-1, 1)
     bars = bars.reshape(-1, 1)
-    mix = vocals + backing
-    mix *= np.max(np.abs(bars))
-    mix *=2
+
     global final
-    bars *= 0.65
-    final = mix + bars
-    final = normalize_audio(mix + bars)
-    final = final.reshape(-1,1)
+    final = (vocals + backing + bars) / 3
+    final /= np.max(np.abs(final))
+    final = final.reshape(-1, 1)
     def export():
         global export_path
         export_path = "output/export_file.mp3"   
