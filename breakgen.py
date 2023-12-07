@@ -44,6 +44,11 @@ def create_ui():
     hyperpop_var = tk.StringVar(value="n")
     hyperpop_entry = tk.Checkbutton(window, variable=hyperpop_var, onvalue="y", offvalue="n")
     hyperpop_entry.grid(row=3, column=1)
+
+    tk.Label(window, text="Energy based sample chops:").grid(row=4)
+    energy_chop_var = tk.StringVar(value="n")
+    energy_chop_entry = tk.Checkbutton(window, variable=energy_chop_var, onvalue="y", offvalue="n")
+    energy_chop_entry.grid(row=4, column=1)
     
     """
     tk.Label(window, text="Reverb vocals:").grid(row=4)
@@ -72,13 +77,14 @@ def create_ui():
         separator = Separator('spleeter:5stems')
         audio_loader = AudioAdapter.default()
         pygame.mixer.init()
-        global hyperpop, reverb_vox, intensity, song_path, bpm, distort_backing, reverb_backing, break_fx
+        global hyperpop, reverb_vox, intensity, song_path, bpm, distort_backing, reverb_backing, break_fx, energy_chop
         hyperpop = hyperpop_var.get()
         ##reverb_vox = reverb_vox_var.get()
         ##distort_backing = distort_backing_var.get()
         ##reverb_backing = reverb_backing_var.get()
         ##break_fx = break_fx_var.get()
         intensity = intensity_entry.get()
+        energy_chop = energy_chop_var.get()
         song_path = song_path_entry.get()
         bpm = bpm_entry.get()
 
@@ -105,15 +111,15 @@ def create_ui():
             song_exported = False
             start_process()
         
-        play_button.grid(row=9, column=1)
-        stop_button.grid(row=10, column=1)
+        play_button.grid(row=10, column=1)
+        stop_button.grid(row=11, column=1)
         exit_button = tk.Button(window, text='Exit', command=exit)
-        exit_button.grid(row=11, column=1)
+        exit_button.grid(row=12, column=1)
         restart_button = tk.Button(window, text="Restart", command=restart_process)
-        restart_button.grid(row=12, column=1)
+        restart_button.grid(row=13, column=1)
     
     start_button = tk.Button(window, text="Start", command=start_process)
-    start_button.grid(row=8, column=1)
+    start_button.grid(row=9, column=1)
 
     window.mainloop()
 
@@ -143,7 +149,7 @@ def timefix(breakbeat):
 
 def replace_drums_with_breakbeats(bars, breakbeats, sr, energy_scores, intensity, drums):
     new_bars = []
-    
+    global energy_chop
     # Calculate energy thresholds based on percentiles
     high_energy_threshold = np.percentile(energy_scores, 70)
     medium_energy_threshold = np.percentile(energy_scores, 35)
@@ -163,26 +169,51 @@ def replace_drums_with_breakbeats(bars, breakbeats, sr, energy_scores, intensity
 
         breakbeat=timefix(breakbeat)
 
+        if energy_chop.lower() == "y":
+            print("energy chop")
+            # Sample chopping based on intensity
+            high_amount = {1: 2, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 8, 8: 16, 9: 32}
+            medium_amount = {1: 4, 2: 4, 3: 4, 4: 2, 5: 2, 6: 2, 7: 4, 8: 8, 9: 16}
+            low_amount = {1: 4, 2: 4, 3: 4, 4: 2, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8}
 
-        # Sample chopping based on intensity
-        chop_chance = {1: 0.5, 2: 0.5, 3: 0.8, 4: 0.6, 5: 0.6, 6: 0.9, 7: 0.6, 8: 0.9, 9: 0.5}
-        chop_amount = {1: 2, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 8, 8: 8, 9: 16}
-        else_amount = {1: 4, 2: 4, 3: 4, 4: 2, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8}
-
-        """if random.random() < .3:
-            if random.random() < chop_chance[intensity]:
-                new_extend = chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy)
-                effected = np.array([effect(new_extend)])
-                new_bars.extend(effected)
+            """if random.random() < .3:
+                if random.random() < chop_chance[intensity]:
+                    new_extend = chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy)
+                    effected = np.array([effect(new_extend)])
+                    new_bars.extend(effected)
+                else:
+                    new_extend = chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy)
+                    effected = np.array([effect(new_extend)])
+                    new_bars.extend(effected)
+            else: """
+            if energy_chop == "high":  
+                new_bars.extend(chop_and_replace(breakbeat, high_amount[intensity], breakbeats, energy))
+            elif energy_chop == "medium":
+                new_bars.extend(chop_and_replace(breakbeat, medium_amount[intensity], breakbeats, energy))
             else:
-                new_extend = chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy)
-                effected = np.array([effect(new_extend)])
-                new_bars.extend(effected)
-        else: """
-        if random.random() < chop_chance[intensity]:  
-            new_bars.extend(chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy))
-        else:
-            new_bars.extend(chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy))
+                new_bars.extend(chop_and_replace(breakbeat, low_amount[intensity], breakbeats, energy))
+
+        elif energy_chop.lower() == "n":
+            print("random chop")
+            # Sample chopping based on intensity
+            chop_chance = {1: 0.5, 2: 0.5, 3: 0.8, 4: 0.6, 5: 0.6, 6: 0.9, 7: 0.6, 8: 0.9, 9: 0.5}
+            chop_amount = {1: 2, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 8, 8: 8, 9: 16}
+            else_amount = {1: 4, 2: 4, 3: 4, 4: 2, 5: 2, 6: 2, 7: 4, 8: 4, 9: 8}
+
+            """if random.random() < .3:
+                if random.random() < chop_chance[intensity]:
+                    new_extend = chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy)
+                    effected = np.array([effect(new_extend)])
+                    new_bars.extend(effected)
+                else:
+                    new_extend = chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy)
+                    effected = np.array([effect(new_extend)])
+                    new_bars.extend(effected)
+            else: """
+            if random.random() < chop_chance[intensity]:  
+                new_bars.extend(chop_and_replace(breakbeat, chop_amount[intensity], breakbeats, energy))
+            else:
+                new_bars.extend(chop_and_replace(breakbeat, else_amount[intensity], breakbeats, energy))
         
 
     new_bars = np.concatenate(new_bars)[:len(drums)]
@@ -272,7 +303,7 @@ def chop_and_replace(breakbeat, n, breakbeats, energy_level):
     return chopped
 
 def main():
-    global hyperpop, intensity, song_path, bpm
+    global hyperpop, intensity, song_path, bpm, energy_chop
     separator = Separator('spleeter:5stems')
 
     # Using custom configuration file.
